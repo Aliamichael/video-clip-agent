@@ -10,24 +10,10 @@ APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 class Transcriber:
     def __init__(self, model_size='tiny'):
         self.model_size = model_size
-        self._model = None
-        self._is_cloud = os.environ.get('VERCEL', '') or os.environ.get('RAILWAY', '')
-
-    def _load_model(self):
-        if self._model is None:
-            if self._is_cloud:
-                raise RuntimeError("Local Whisper not supported in cloud. Use OpenAI API.")
-            try:
-                import whisper
-                logger.info(f"Loading Whisper model: {self.model_size}")
-                self._model = whisper.load_model(self.model_size)
-            except Exception as e:
-                raise RuntimeError(f"Failed to load local Whisper: {e}")
-
-        return self._model
 
     def extract_audio(self, video_path, job_id, output_dir=None):
-        if self._is_cloud:
+        is_cloud = os.environ.get('VERCEL', '') or os.environ.get('RAILWAY', '')
+        if is_cloud:
             output_dir = '/tmp/uploads'
         else:
             output_dir = output_dir or os.path.join(APP_DIR, 'uploads')
@@ -71,14 +57,11 @@ class Transcriber:
         if not os.path.exists(audio_path):
             raise Exception(f"Audio file not found: {audio_path}")
         
-        if use_local and not self._is_cloud:
-            return self._transcribe_local(audio_path)
-        else:
-            api_key = os.getenv('OPENAI_API_KEY', '')
-            if api_key:
-                return self._transcribe_api(audio_path, api_key)
-            else:
-                raise Exception("OPENAI_API_KEY required for cloud deployment")
+        api_key = os.getenv('OPENAI_API_KEY', '')
+        if not api_key:
+            raise Exception("OPENAI_API_KEY required for transcription")
+        
+        return self._transcribe_api(audio_path, api_key)
 
     def _transcribe_api(self, audio_path, api_key):
         from openai import OpenAI
@@ -109,33 +92,6 @@ class Transcriber:
             'full_text': response.text,
             'segments': segments,
             'language': 'en'
-        }
-
-    def _transcribe_local(self, audio_path):
-        model = self._load_model()
-        
-        logger.info(f"Starting local transcription...")
-        result = model.transcribe(
-            audio_path,
-            language='en',
-            task='transcribe',
-            verbose=False
-        )
-        
-        segments = []
-        for segment in result['segments']:
-            segments.append({
-                'start': segment['start'],
-                'end': segment['end'],
-                'text': segment['text'].strip()
-            })
-        
-        logger.info(f"Transcription complete, {len(segments)} segments")
-        
-        return {
-            'full_text': result['text'],
-            'segments': segments,
-            'language': result.get('language', 'en')
         }
 
     def transcribe_with_timestamps(self, audio_path, job_id, use_local=False):
