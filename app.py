@@ -2,21 +2,29 @@ import os
 import json
 import uuid
 import threading
-from flask import Flask, render_template, request, jsonify, send_file, Response
+from flask import Flask, render_template, request, jsonify, send_file
 from flask_cors import CORS
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
+IS_CLOUD = os.environ.get('VERCEL', '') or os.environ.get('RAILWAY', '')
+
+if IS_CLOUD:
+    UPLOAD_FOLDER = '/tmp/uploads'
+    OUTPUT_FOLDER = '/tmp/outputs'
+else:
+    UPLOAD_FOLDER = os.path.join(APP_DIR, 'uploads')
+    OUTPUT_FOLDER = os.path.join(APP_DIR, 'outputs')
 
 from services.youtube_downloader import YouTubeDownloader
 from services.transcriber import Transcriber
 from services.moment_extractor import MomentExtractor
 from services.video_clipper import VideoClipper
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder=os.path.join(APP_DIR, 'templates'))
 CORS(app)
 
-app.config['UPLOAD_FOLDER'] = os.path.join(APP_DIR, 'uploads')
-app.config['OUTPUT_FOLDER'] = os.path.join(APP_DIR, 'outputs')
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024 * 1024
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -31,7 +39,7 @@ class VideoClipAgent:
         self.moment_extractor = MomentExtractor()
         self.clipper = VideoClipper()
 
-    def process_video(self, video_source, job_id, platform='all', use_local=True):
+    def process_video(self, video_source, job_id, platform='all', use_local=False):
         try:
             jobs[job_id]['status'] = 'downloading'
             jobs[job_id]['progress'] = 10
@@ -79,6 +87,8 @@ class VideoClipAgent:
         except Exception as e:
             jobs[job_id]['status'] = 'error'
             jobs[job_id]['error'] = str(e)
+            import traceback
+            traceback.print_exc()
 
 agent = VideoClipAgent()
 
@@ -91,7 +101,7 @@ def process_video():
     data = request.json
     video_url = data.get('video_url')
     platform = data.get('platform', 'all')
-    use_local = data.get('use_local', True)
+    use_local = data.get('use_local', False) and not IS_CLOUD
 
     if not video_url:
         return jsonify({'error': 'No video URL provided'}), 400
@@ -172,7 +182,7 @@ def get_transcript(job_id):
 
 @app.route('/api/config', methods=['GET', 'POST'])
 def config():
-    config_path = 'config.json'
+    config_path = os.path.join(APP_DIR, 'config.json') if not IS_CLOUD else '/tmp/config.json'
     
     if request.method == 'POST':
         data = request.json
@@ -186,9 +196,9 @@ def config():
     else:
         return jsonify({
             'openai_key': '',
-            'use_local_by_default': True,
+            'use_local_by_default': False,
             'ollama_url': 'http://localhost:11434'
         })
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=not IS_CLOUD, host='0.0.0.0', port=5000)

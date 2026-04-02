@@ -11,21 +11,31 @@ class Transcriber:
     def __init__(self, model_size='tiny'):
         self.model_size = model_size
         self._model = None
+        self._is_cloud = os.environ.get('VERCEL', '') or os.environ.get('RAILWAY', '')
 
     def _load_model(self):
         if self._model is None:
-            import whisper
-            logger.info(f"Loading Whisper model: {self.model_size}")
-            self._model = whisper.load_model(self.model_size)
+            if self._is_cloud:
+                raise RuntimeError("Local Whisper not supported in cloud. Use OpenAI API.")
+            try:
+                import whisper
+                logger.info(f"Loading Whisper model: {self.model_size}")
+                self._model = whisper.load_model(self.model_size)
+            except Exception as e:
+                raise RuntimeError(f"Failed to load local Whisper: {e}")
+
         return self._model
 
     def extract_audio(self, video_path, job_id, output_dir=None):
-        output_dir = output_dir or os.path.join(APP_DIR, 'uploads')
+        if self._is_cloud:
+            output_dir = '/tmp/uploads'
+        else:
+            output_dir = output_dir or os.path.join(APP_DIR, 'uploads')
+        
         os.makedirs(output_dir, exist_ok=True)
         audio_path = os.path.join(output_dir, f'{job_id}_audio.mp3')
         
         logger.info(f"Video path: {video_path}")
-        logger.info(f"Video exists: {os.path.exists(video_path)}")
         
         if not os.path.exists(video_path):
             raise Exception(f"Video file not found: {video_path}")
@@ -34,11 +44,7 @@ class Transcriber:
         logger.info(f"Video file size: {file_size} bytes")
         
         if file_size < 10000:
-            raise Exception(f"Video file is too small ({file_size} bytes): {video_path}")
-        
-        import mimetypes
-        mime_type, _ = mimetypes.guess_type(video_path)
-        logger.info(f"Detected MIME type: {mime_type}")
+            raise Exception(f"Video file is too small ({file_size} bytes)")
         
         logger.info(f"Extracting audio to: {audio_path}")
         
@@ -51,36 +57,28 @@ class Transcriber:
         
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode != 0:
-            logger.error(f"FFmpeg stderr: {result.stderr}")
+            logger.error(f"FFmpeg error: {result.stderr}")
             raise Exception(f"FFmpeg error: {result.stderr}")
         
         if not os.path.exists(audio_path):
-            raise Exception(f"Audio file was not created: {audio_path}")
-        
-        audio_size = os.path.getsize(audio_path)
-        logger.info(f"Audio file created, size: {audio_size} bytes")
-        
-        if audio_size < 1000:
-            raise Exception(f"Audio file is too small ({audio_size} bytes), likely corrupted")
+            raise Exception(f"Audio file was not created")
         
         return audio_path
 
-    def transcribe(self, audio_path, job_id, use_local=True):
+    def transcribe(self, audio_path, job_id, use_local=False):
         logger.info(f"Transcribe called with: {audio_path}")
-        logger.info(f"File exists: {os.path.exists(audio_path)}")
         
         if not os.path.exists(audio_path):
             raise Exception(f"Audio file not found: {audio_path}")
         
-        if use_local:
+        if use_local and not self._is_cloud:
             return self._transcribe_local(audio_path)
         else:
             api_key = os.getenv('OPENAI_API_KEY', '')
             if api_key:
                 return self._transcribe_api(audio_path, api_key)
             else:
-                logger.warning("No API key found, falling back to local")
-                return self._transcribe_local(audio_path)
+                raise Exception("OPENAI_API_KEY required for cloud deployment")
 
     def _transcribe_api(self, audio_path, api_key):
         from openai import OpenAI
@@ -114,15 +112,9 @@ class Transcriber:
         }
 
     def _transcribe_local(self, audio_path):
-        import whisper
-        
-        if not audio_path.lower().endswith(('.mp3', '.wav', '.m4a', '.flac', '.ogg')):
-            raise Exception(f"Not an audio file: {audio_path}")
-        
-        logger.info(f"Loading model for transcription...")
         model = self._load_model()
         
-        logger.info(f"Starting transcription of: {audio_path}")
+        logger.info(f"Starting local transcription...")
         result = model.transcribe(
             audio_path,
             language='en',
@@ -146,7 +138,7 @@ class Transcriber:
             'language': result.get('language', 'en')
         }
 
-    def transcribe_with_timestamps(self, audio_path, job_id, use_local=True):
+    def transcribe_with_timestamps(self, audio_path, job_id, use_local=False):
         transcript = self.transcribe(audio_path, job_id, use_local)
         
         timestamped = []

@@ -2,11 +2,20 @@ import os
 import yt_dlp
 
 APP_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-FFMPEG_PATH = r"C:\Users\offic\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin\ffmpeg.exe"
+
+def get_ffmpeg_path():
+    local_ffmpeg = r"C:\Users\offic\AppData\Local\Microsoft\WinGet\Packages\Gyan.FFmpeg_Microsoft.Winget.Source_8wekyb3d8bbwe\ffmpeg-8.1-full_build\bin\ffmpeg.exe"
+    if os.path.exists(local_ffmpeg):
+        return os.path.dirname(local_ffmpeg)
+    return None
 
 class YouTubeDownloader:
     def __init__(self, output_dir=None):
-        self.output_dir = output_dir or os.path.join(APP_DIR, 'uploads')
+        is_cloud = os.environ.get('VERCEL', '') or os.environ.get('RAILWAY', '')
+        if is_cloud:
+            self.output_dir = '/tmp/uploads'
+        else:
+            self.output_dir = output_dir or os.path.join(APP_DIR, 'uploads')
         os.makedirs(self.output_dir, exist_ok=True)
 
     def download(self, url, job_id):
@@ -15,11 +24,14 @@ class YouTubeDownloader:
         ydl_opts = {
             'format': 'best[ext=mp4]/best',
             'outtmpl': output_template,
-            'quiet': False,
-            'no_warnings': False,
-            'ffmpeg_location': os.path.dirname(FFMPEG_PATH),
+            'quiet': True,
+            'no_warnings': True,
             'postprocessors': [],
         }
+        
+        ffmpeg_path = get_ffmpeg_path()
+        if ffmpeg_path:
+            ydl_opts['ffmpeg-location'] = ffmpeg_path
         
         print(f"Downloading video from: {url}")
         
@@ -48,11 +60,12 @@ class YouTubeDownloader:
         return video_path
 
     def get_video_info(self, url):
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'ffmpeg_location': os.path.dirname(FFMPEG_PATH),
-        }
+        ydl_opts = {'quiet': True, 'no_warnings': True}
+        
+        ffmpeg_path = get_ffmpeg_path()
+        if ffmpeg_path:
+            ydl_opts['ffmpeg-location'] = ffmpeg_path
+            
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return {
