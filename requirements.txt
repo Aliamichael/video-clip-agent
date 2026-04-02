@@ -1,0 +1,23 @@
+# Web Framework
+flask==3.0.0
+flask-cors==4.0.0
+
+# Video/Audio Processing
+yt-dlp>=2026.3.17
+ffmpeg-python==0.2.0
+
+# AI/ML Services
+openai>=1.12.0
+openai-whisper>=20240930
+
+# Local LLM (optional)
+ollama==0.1.2
+
+# Utilities
+python-dotenv==1.0.0
+requests==2.31.0
+tqdm==4.66.1
+
+# Async Processing
+celery==5.3.6
+redis==5.0.1

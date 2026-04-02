@@ -1,0 +1,42 @@
+# Environment
+.env
+.env.local
+config.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# Dependencies (install with pip)
+# requirements.txt should be committed
+
+# Project files
+uploads/
+outputs/
+*.mp4
+*.mp3
+*.wav
+*.m4a
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary
+*.tmp
+.cache/
