@@ -13,24 +13,30 @@ AI-powered tool that extracts engaging short clips from long YouTube videos for 
   - Facebook
   - TikTok
 
-## Deployment
+## Hosting Options
 
-### Local Development
+### Local (Recommended for full functionality)
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 export OPENAI_API_KEY=your-key-here
 python app.py
 ```
 
-### Cloud Deployment (Vercel)
+### Railway (Best for cloud deployment)
 
-1. Push to GitHub
-2. Connect repo to Vercel
-3. Set environment variable: `OPENAI_API_KEY`
-4. Deploy!
+1. Connect your GitHub repo to [Railway](https://railway.app)
+2. Add `OPENAI_API_KEY` environment variable
+3. Deploy!
 
-**Note:** Cloud deployment requires OpenAI API key (pay-per-use, ~$0.006/min for transcription)
+Railway supports:
+- Long-running processes (no 10s timeout)
+- FFmpeg installation via Dockerfile
+- Persistent storage
+
+### Vercel (Limited - UI only)
+
+Vercel Lambda has **10-second timeout** - not suitable for video processing.
 
 ## Configuration
 
@@ -38,8 +44,6 @@ Set environment variable:
 ```bash
 export OPENAI_API_KEY=sk-your-key-here
 ```
-
-Or use the Settings panel in the web UI.
 
 ## Usage
 
@@ -63,8 +67,10 @@ Or use the Settings panel in the web UI.
 ```
 video-clip-agent/
 ├── app.py                    # Flask web application
-├── requirements.txt          # Python dependencies
+├── requirements.txt          # Cloud dependencies (minimal)
+├── requirements-dev.txt     # Local development (full)
 ├── vercel.json              # Vercel config
+├── Dockerfile               # Railway/Docker deployment
 ├── services/
 │   ├── youtube_downloader.py # Video download
 │   ├── transcriber.py        # Audio transcription
@@ -84,7 +90,6 @@ video-clip-agent/
 | `/api/process` | POST | Start video processing |
 | `/api/status/<job_id>` | GET | Get job status |
 | `/api/clips/<job_id>` | GET | Get generated clips |
-| `/api/download/<job_id>/<index>` | GET | Download clip |
 
 ## License
 
